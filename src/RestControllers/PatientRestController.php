@@ -34,9 +34,10 @@ class PatientRestController
         "phone_home",
         "phone_biz",
         "phone_cell",
-        'postal_contact',
-        'sex',
-        'country_code',
+        "is_active",
+        "postal_contact",
+        "sex",
+        "country_code",
         "email",
         "DOB",
     );
