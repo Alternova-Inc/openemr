@@ -129,6 +129,7 @@ class QueryPagination implements \JsonSerializable
         $links = [
             'first' => $searchQueryUri . "&_offset=" . $this->firstOffsetId . "&_count=" . $this->limit
         ];
+        $links['count'] = $this->getTotalCount();
         if ($this->currentOffsetId > 0) {
             $links['previous'] = $searchQueryUri . "&_offset=" . $this->previousOffsetId . "&_count=" . $this->limit;
         }
