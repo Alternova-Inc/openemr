@@ -67,7 +67,7 @@ if (isset($_POST['form_save']) && $_POST['form_save'] == 'submit') {
         $forced_reset_disable = $option;
     }
     // TODO: @adunsulag do we clear the pwd variables here?? Hard to break it out into separate functions when we do that...
-    $result = $patientAccessOnSiteService->saveCredentials($pid, $_POST['pwd'], $_POST['uname'], $_POST['login_uname'], $forced_reset_disable);
+    $result = $patientAccessOnSiteService->saveCredentials($pid, $_POST['pwd'], $_POST['uname'], $_POST['login_uname'], 1);
     if (!empty($result)) {
         $emailResult = $patientAccessOnSiteService->sendCredentialsEmail($pid, $result['pwd'], $result['uname'], $result['login_uname'], $result['email_direct']);
         if ($emailResult['success']) {
@@ -79,6 +79,7 @@ if (isset($_POST['form_save']) && $_POST['form_save'] == 'submit') {
 }
 $trustedUserName = $patientAccessOnSiteService->getUniqueTrustedUsernameForPid($pid);
 $trustedEmail = $patientAccessOnSiteService->getTrustedEmailForPid($pid);
+$patientData = sqlQuery("SELECT * FROM `patient_data` WHERE `pid`=?", array($pid));
 
 echo $patientAccessOnSiteService->filterTwigTemplateData($pid, 'patient/portal_login/print.html.twig', [
     'credMessage' => $credMessage
@@ -88,7 +89,7 @@ echo $patientAccessOnSiteService->filterTwigTemplateData($pid, 'patient/portal_l
     , 'id' => $credentials['id']
     , 'uname' => $credentials['portal_username'] ?: $credentials['fname'] . $credentials['id']
     , 'login_uname' => $credentials['portal_login_username'] ?? $trustedUserName
-    , 'pwd' => $patientAccessOnSiteService->getRandomPortalPassword()
+    , 'pwd' => $patientData["drivers_license"]
     , 'enforce_signin_email' => $GLOBALS['enforce_signin_email']
     , 'email_direct' => trim($trustedEmail['email_direct'])
     , 'forced_reset_disable' => $forced_reset_disable
