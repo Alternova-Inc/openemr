@@ -5707,10 +5707,6 @@ RestConfig::$ROUTE_MAP = array(
         return $return;
     },
 
-    "GET /api/test" => function () {
-        return "Hello world";
-    },
-
     /**
      *  @OA\Get(
      *      path="/api/user/{uuid}",
