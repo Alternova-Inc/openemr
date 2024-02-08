@@ -42,6 +42,7 @@ class PatientService extends BaseService
 {
     public const TABLE_NAME = 'patient_data';
     private const PATIENT_HISTORY_TABLE = "patient_history";
+    private const HAS_PORTAL_PERMISSION = "yes";
 
     /**
      * In the case where a patient doesn't have a picture uploaded,
@@ -182,7 +183,7 @@ class PatientService extends BaseService
      * @param $puuidString
      * @return void
      */
-    public function allowPatientPortal($puuidString)
+    public function allowPatientPortal($puuidString): void
     {
         $sql = "UPDATE `patient_data` SET";
         $sql .= " `allow_patient_portal`='YES'";
@@ -197,14 +198,31 @@ class PatientService extends BaseService
      * @param $patient_data
      * @return boolean
      */
-    public function hasPortalPermission($patient_data)
+    public function hasPortalPermission($patient_data): bool
     {
         $patient_portal_permission = strtolower($patient_data["allow_patient_portal"]);
-        $has_portal_permission = "yes";
 
         return !(
             empty($patient_data["allow_patient_portal"]) ||
-            $patient_portal_permission != $has_portal_permission
+            $patient_portal_permission != self::HAS_PORTAL_PERMISSION
+        );
+    }
+
+    /**
+     * It is responsible for saving a patient's credentials.
+     *
+     * @param $patient_data, $patient_password
+     * @return void
+     */
+    private function onSaveCredentials($patient_data, $patient_password): void {
+        $portal_permission = 1;
+        $patientAccessOnSiteService = new PatientAccessOnsiteService(); 
+        $patientAccessOnSiteService->saveCredentials(
+            $patient_data["pid"], 
+            $patient_password, 
+            $patient_data["fname"], 
+            $patient_data["email"], 
+            $portal_permission
         );
     }
 
@@ -216,12 +234,11 @@ class PatientService extends BaseService
      * @param $patient_data
      * @return ProcessingResult
      */
-    public function setPatientAccess($puuidString, $data)
+    public function setPatientAccess($puuidString, $data): ProcessingResult
     {
         $data["uuid"] = $puuidString;
-        $portal_permission = 1;
-        $patientAccessOnSiteService = new PatientAccessOnsiteService(); 
         $processingResult = $this->patientValidator->validate($data, PatientValidator::DATABASE_UPDATE_CONTEXT);
+        
         if (!$processingResult->isValid()) {
             return $processingResult;
         }
@@ -236,7 +253,7 @@ class PatientService extends BaseService
                 $this->allowPatientPortal($puuidString);
             }
 
-            $patientAccessOnSiteService->saveCredentials($patient_data["pid"], $patient_password, $patient_data["fname"], $patient_data["email"], $portal_permission);
+            $this->onSaveCredentials($patient_data, $patient_password);
             $processingResult->addData([
                 "user" => $patient_data["email"],
                 "password" => $patient_password
