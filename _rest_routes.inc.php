@@ -1516,6 +1516,44 @@ RestConfig::$ROUTE_MAP = array(
 
     /**
      *  @OA\Get(
+     *      path="/api/patient/:puuid/access",
+     *      description="Add access credentials to the patient portal.",
+     *      tags={"standard"},
+     *      @OA\Parameter(
+     *          name="puuid",
+     *          in="path",
+     *          description="The uuid for the patient.",
+     *          required=true,
+     *          @OA\Schema(
+     *              type="string"
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="400",
+     *          ref="#/components/responses/badrequest"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "POST /api/patient/:puuid/access" => function ($puuid) {
+        RestConfig::authorization_check("patients", "demo");
+        $data = (array) (json_decode(file_get_contents("php://input")));
+        $return = (new PatientRestController())->setPatientAccess($puuid, $data);
+        RestConfig::apiLog($return);
+        return $return;
+    },
+    
+
+    /**
+     *  @OA\Get(
      *      path="/api/patient/{puuid}/encounter",
      *      description="Retrieves a list of encounters for a single patient",
      *      tags={"standard"},

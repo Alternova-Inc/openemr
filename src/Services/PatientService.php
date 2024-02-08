@@ -19,6 +19,8 @@ namespace OpenEMR\Services;
 use OpenEMR\Common\Database\QueryPagination;
 use OpenEMR\Common\Database\QueryUtils;
 use OpenEMR\Common\ORDataObject\Address;
+use OpenEMR\Common\Auth\UuidUserAccount;
+use OpenEMR\Services\PatientAccessOnsiteService;
 use OpenEMR\Common\ORDataObject\ContactAddress;
 use OpenEMR\Common\Uuid\UuidRegistry;
 use OpenEMR\Events\Patient\BeforePatientCreatedEvent;
@@ -170,6 +172,77 @@ class PatientService extends BaseService
             return $data;
         } else {
             return false;
+        }
+    }
+
+    /**
+     * Grants portal access to patients in case they do
+     * not have the permission.
+     *
+     * @param $puuidString
+     * @return void
+     */
+    public function allowPatientPortal($puuidString)
+    {
+        $sql = "UPDATE `patient_data` SET";
+        $sql .= " `allow_patient_portal`='YES'";
+        $sql .= " WHERE `uuid` = ?";
+        $puuidBinary = UuidRegistry::uuidToBytes($puuidString);
+        sqlQuery($sql, array($puuidBinary));
+    }
+
+    /**
+     * Verifies if the patient has access to the portal.
+     *
+     * @param $patient_data
+     * @return boolean
+     */
+    public function hasPortalPermission($patient_data)
+    {
+        $patient_portal_permission = strtolower($patient_data["allow_patient_portal"]);
+        $has_portal_permission = "yes";
+
+        return !(
+            empty($patient_data["allow_patient_portal"]) ||
+            $patient_portal_permission != $has_portal_permission
+        );
+    }
+
+    /**
+     * This function is responsible for adding a password for
+     * patients to access the portal. If no password is specified,
+     * the default password is the document number.
+     *
+     * @param $patient_data
+     * @return ProcessingResult
+     */
+    public function setPatientAccess($puuidString, $data)
+    {
+        $data["uuid"] = $puuidString;
+        $portal_permission = 1;
+        $patientAccessOnSiteService = new PatientAccessOnsiteService(); 
+        $processingResult = $this->patientValidator->validate($data, PatientValidator::DATABASE_UPDATE_CONTEXT);
+        if (!$processingResult->isValid()) {
+            return $processingResult;
+        }
+        
+        $patient = $this->getOne($puuidString);
+        if($patient->hasData()) {
+            $patient_data = $patient->getData()[0];            
+            $has_portal_permission = $this->hasPortalPermission($patient_data);
+            $patient_password = empty($data["password"]) ? $patient_data["drivers_license"] : $data["password"];
+
+            if(!$has_portal_permission) {
+                $this->allowPatientPortal($puuidString);
+            }
+
+            $patientAccessOnSiteService->saveCredentials($patient_data["pid"], $patient_password, $patient_data["fname"], $patient_data["email"], $portal_permission);
+            $processingResult->addData([
+                "user" => $patient_data["email"],
+                "password" => $patient_password
+            ]);
+
+            return $processingResult;
         }
     }
 

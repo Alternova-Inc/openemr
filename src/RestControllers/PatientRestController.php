@@ -58,6 +58,18 @@ class PatientRestController
         return RestControllerHelper::handleProcessingResult($processingResult, 201);
     }
 
+
+    /**
+     * Process a HTTP POST request used to create a patient portal credentials.
+     * @param $data - array of patient fields, $puuidString - uuid of patient
+     * @return a 200/Ok status code and the patient identifier if successful.
+     */
+    public function setPatientAccess($puuidString, $data)
+    {
+        $processingResult = $this->patientService->setPatientAccess($puuidString, $data);
+        return RestControllerHelper::handleProcessingResult($processingResult, 200);
+    }
+
     /**
      * Processes a HTTP PUT request used to update an existing patient record.
      * @param $puuidString - The patient uuid identifier in string format.
