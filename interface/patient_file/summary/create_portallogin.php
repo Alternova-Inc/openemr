@@ -47,11 +47,6 @@ function displayLogin($patient_id, $message, $emailFlag)
 $patientAccessOnSiteService = new PatientAccessOnsiteService();
 $credentials = $patientAccessOnSiteService->getOnsiteCredentialsForPid($pid);
 
-echo "aaaaa";
-echo $_POST['uname'];
-echo "<br/>";
-echo $_POST['login_uname'];
-
 $option = $GLOBALS['portal_force_credential_reset'] ?? '0';
 if ($option == '2') {
     $forced_reset_disable = PatientAccessOnsiteService::fetchUserSetting('portal_login.credential_reset_disable');
@@ -62,7 +57,6 @@ if ($option == '2') {
 }
 
 $credMessage = '';
-
 if (isset($_POST['form_save']) && $_POST['form_save'] == 'submit') {
     if (!CsrfUtils::verifyCsrfToken($_POST["csrf_token_form"])) {
         CsrfUtils::csrfNotVerified();
