@@ -183,7 +183,7 @@ class PatientService extends BaseService
      * @param $puuidString
      * @return void
      */
-    public function allowPatientPortal($puuidString): void
+    public function allowPatientPortal(string $puuidString): void
     {
         $sql = "UPDATE `patient_data` SET";
         $sql .= " `allow_patient_portal`='YES'";
@@ -198,7 +198,7 @@ class PatientService extends BaseService
      * @param $patient_data
      * @return boolean
      */
-    public function hasPortalPermission($patient_data): bool
+    public function hasPortalPermission(array $patient_data): bool
     {
         $patient_portal_permission = strtolower($patient_data["allow_patient_portal"]);
 
@@ -214,7 +214,7 @@ class PatientService extends BaseService
      * @param $patient_data, $patient_password
      * @return void
      */
-    private function onSaveCredentials($patient_data, $patient_password): void {
+    private function onSaveCredentials(array $patient_data, string $patient_password): void {
         $portal_permission = 1;
         $patientAccessOnSiteService = new PatientAccessOnsiteService(); 
         $patientAccessOnSiteService->saveCredentials(
@@ -234,7 +234,7 @@ class PatientService extends BaseService
      * @param $patient_data
      * @return ProcessingResult
      */
-    public function setPatientAccess($puuidString, $data): ProcessingResult
+    public function setPatientAccess(string $puuidString, array $data): ProcessingResult
     {
         $data["uuid"] = $puuidString;
         $processingResult = $this->patientValidator->validate($data, PatientValidator::DATABASE_UPDATE_CONTEXT);

@@ -64,7 +64,7 @@ class PatientRestController
      * @param $data - array of patient fields, $puuidString - uuid of patient
      * @return a 200/Ok status code and the patient identifier if successful.
      */
-    public function setPatientAccess($puuidString, $data)
+    public function setPatientAccess(string $puuidString, array $data): array
     {
         $processingResult = $this->patientService->setPatientAccess($puuidString, $data);
         return RestControllerHelper::handleProcessingResult($processingResult, 200);
