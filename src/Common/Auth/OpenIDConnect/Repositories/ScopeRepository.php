@@ -260,7 +260,11 @@ class ScopeRepository implements ScopeRepositoryInterface
             "iat", // token create time
             "iss", // token issuer(https://domain)
             "exp", // token expiry time.
-            "sub" // the subject of token. usually patient UUID.
+            "sub", // the subject of token. usually patient UUID.
+            "user/access.read",
+            "patient/access.read",
+            "user/access.write",
+            "patient/access.write",
         );
     }
 
@@ -281,7 +285,11 @@ class ScopeRepository implements ScopeRepositoryInterface
             "offline_access",
             "api:oemr",
             "api:fhir",
-            "api:port"
+            "api:port",
+            "user/access.read",
+            "patient/access.read",
+            "user/access.write",
+            "patient/access.write",
         ];
     }
 
