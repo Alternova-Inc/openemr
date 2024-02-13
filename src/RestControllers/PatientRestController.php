@@ -32,6 +32,7 @@ class PatientRestController
         "city",
         "state",
         "phone_home",
+        "drivers_license",
         "phone_biz",
         "phone_cell",
         "is_active",
