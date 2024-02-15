@@ -33,6 +33,14 @@ class AppointmentService extends BaseService
     const PRACTITIONER_TABLE = "users";
     const FACILITY_TABLE = "facility";
 
+    private const FILTER_METHODS_MAPPER = array(
+        "puuid" => "getAppointmentsByPatientUuid",
+        "pc_title" => "getAppointmentsByTitle",
+        "pc_eventDate" => "getAppointmentsByDate",
+        "pc_apptstatus" => "getAppointmentsStatus",
+        "date_range" => "getAppointmentsByDateRange"
+    );
+
     /**
      * @var EncounterService
      */
@@ -84,6 +92,28 @@ class AppointmentService extends BaseService
         return ['puuid', 'pce_aid_uuid', 'pc_uuid', 'facility_uuid', 'billing_location_uuid' ];
     }
 
+    /**
+     * Validates the data for updating an appointment.
+     *
+     * @param array $appointment An array containing the appointment data to be validated.
+     * @return ValidationResult Returns the result of the validation operation.
+     */
+    public function update_validate(array $appointment)
+    {
+        $validator = new Validator();
+
+        $validator->optional('pc_title')->string();
+        $validator->optional('pc_room')->string();
+        $validator->optional('pc_eventDate')->datetime('Y-m-d');
+        $validator->optional('pc_hometext')->string();
+        $validator->optional('pc_startTime')->length(5);
+        $validator->optional('pc_endTime')->length(5);
+        $validator->optional('pc_duration')->numeric();
+        $validator->optional('pc_apptstatus')->string();
+
+        return $validator->validate($appointment);
+    }
+
     public function validate($appointment)
     {
         $validator = new Validator();
@@ -91,10 +121,12 @@ class AppointmentService extends BaseService
         $validator->required('pc_catid')->numeric();
         $validator->required('pc_title')->lengthBetween(2, 150);
         $validator->required('pc_duration')->numeric();
+        $validator->required('pc_room')->string();
         $validator->required('pc_hometext')->string();
         $validator->required('pc_apptstatus')->string();
         $validator->required('pc_eventDate')->datetime('Y-m-d');
         $validator->required('pc_startTime')->length(5); // HH:MM is 5 chars
+        $validator->required('pc_endTime')->length(5); // HH:MM is 5 chars
         $validator->required('pc_facility')->numeric();
         $validator->required('pc_billing_location')->numeric();
         $validator->optional('pc_aid')->numeric()
@@ -105,10 +137,12 @@ class AppointmentService extends BaseService
                 }
                 return true;
             });
-        $validator->optional('pid')->callback(function ($value, $data) {
-            $id = QueryUtils::fetchSingleValue('Select id FROM patient_data WHERE pid = ? ', 'id', [$value]);
-            if (empty($id)) {
-                throw new InvalidValueException('pid must be for a valid patient', 'pid');
+        $validator->optional('puuid')->callback(function ($value, $data) {
+            $puuidBinary = $this->decodeUuid($value);
+            $account_sql = "SELECT * FROM `patient_data` WHERE `uuid` = ?";
+            $uuid = sqlQuery($account_sql, array($puuidBinary));
+            if (empty($uuid)) {
+                throw new InvalidValueException('uuid must be for a valid patient', 'uuid');
             }
             return true;
         });
@@ -189,6 +223,200 @@ class AppointmentService extends BaseService
         return $processingResult;
     }
 
+    /**
+     * Decodes a UUID string into bytes.
+     *
+     * @param string $puuid The UUID string to decode.
+     * @return string|null Returns the decoded UUID as bytes, or null if decoding fails.
+     */
+    private function decodeUuid(string $puuid)
+    {
+        try{
+            return UuidRegistry::uuidToBytes($puuid);
+        } catch (\Exception $e) {}
+    }
+
+    /**
+     * Transforms the query result into a custom JSON object.
+     *
+     * @param mixed $result The result of the query.
+     * @return array Returns an array containing the transformed result.
+     */
+    private function renderResults($result): array
+    {
+        $results = array();
+        while ($row = sqlFetchArray($result)) {
+            array_push($results, array(
+                "pc_uuid" => UuidRegistry::uuidToString($row["pc_uuid"]),
+                "puuid" => UuidRegistry::uuidToString($row["puuid"]),
+                "pc_title" => $row["pc_title"],
+                "pc_hometext" => $row["pc_hometext"],
+                "pc_time" => $row["pc_time"],
+                "pd_fname" => $row["fname"],
+                "pd_lname" => $row["lname"],
+                "pd_email" => $row["email"],
+                "pd_drivers_license" => $row["drivers_license"],
+                "pc_room" => $row["pc_room"],
+                "pc_eventDate" => $row["pc_eventDate"],
+                "pc_startTime" => $row["pc_startTime"],
+                "pc_endTime" => $row["pc_endTime"],
+                "pc_duration" => $row["pc_duration"],
+                "pc_apptstatus" => $row["pc_apptstatus"],
+            ));
+        }
+        return $results;
+    }
+
+    /**
+     * Retrieves all medical appointments that are in the database.
+     *
+     * @param string $sql The SQL query string to retrieve appointments.
+     * @return ADORecordSet_mysqli Returns the result set of all appointments.
+     */
+    private function getAllAppointments(string $sql)
+    {
+        $sql .= " ORDER BY `pce`.`pc_time` DESC";
+        return sqlStatement($sql);
+    }
+
+    /**
+     * Allows filtering medical appointments by patient UUID.
+     *
+     * @param string $puuid The UUID of the patient to filter appointments.
+     * @param string $sql The SQL query string to which the filter condition will be appended.
+     * @return ADORecordSet_mysqli|null Returns the result set of filtered appointments if patient is found; otherwise, returns null.
+     */
+    private function getAppointmentsByPatientUuid(string $puuid, string $sql)
+    {
+        $puuidBinary = $this->decodeUuid($puuid);
+        $account_sql = "SELECT * FROM `patient_data` WHERE `uuid` = ?";
+        $patient = sqlQuery($account_sql, array($puuidBinary));
+
+        if(!empty($patient)) {
+            $sql .= " WHERE `pd`.`pid` = " . $patient["pid"];
+            $sql .= " ORDER BY `pce`.`pc_time` DESC";
+            return sqlStatement($sql);
+        }
+
+        return null;
+    }
+
+    /**
+     * Allows filtering medical appointments by a specific date.
+     *
+     * @param string $date The date to filter appointments.
+     * @param string $sql The SQL query string to which the filter condition will be appended.
+     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     */
+    private function getAppointmentsByDate(string $date, string $sql)
+    {
+        $sql .= " WHERE `pce` . `pc_eventDate` = '$date'";
+        $sql .= " ORDER BY `pce`.`pc_time` DESC";
+        return sqlStatement($sql);
+    }
+
+    /**
+     * Allows filtering medical appointments within a date range.
+     *
+     * @param string $dateRange The date range in the format "start_date:end_date" to filter appointments.
+     * @param string $sql The SQL query string to which the filter condition will be appended.
+     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     */
+    private function getAppointmentsByDateRange(string $dateRange, string $sql)
+    {
+        $dateRange = str_replace(" ", "", $dateRange);
+        $split_date = explode(":", $dateRange);
+        $start_date = $split_date[0];
+        $end_range = $split_date[1];
+
+        $sql .= " WHERE `pce` . `pc_eventDate` BETWEEN '$start_date' AND '$end_range'";
+        $sql .= " ORDER BY `pce`.`pc_time` DESC";
+        return sqlStatement($sql);
+    }
+
+    /**
+     * Allows filtering medical appointments based on their title.
+     *
+     * @param string $title The title of appointments to filter.
+     * @param string $sql The SQL query string to which the filter condition will be appended.
+     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     */
+    private function getAppointmentsByTitle(string $title, string $sql)
+    {
+        $sql .= " WHERE LOWER(`pc_title`) LIKE '%$title%'";
+        $sql .= " ORDER BY `pce`.`pc_time` DESC";
+        return sqlStatement($sql);
+    }
+
+    /**
+     * Allows filtering medical appointments based on their status.
+     *
+     * @param string $status The status of appointments to filter.
+     * @param string $sql The SQL query string to which the filter condition will be appended.
+     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     */
+    private function getAppointmentsStatus(string $status, string $sql)
+    {
+        $sql .= " WHERE LOWER(`pc_apptstatus`) LIKE '%$status%'";
+        $sql .= " ORDER BY `pce`.`pc_time` DESC";
+        return sqlStatement($sql);
+    }
+
+    /**
+     * Retrieves a list of appointments available in the database.
+     *
+     * @param string $filter_type The type of filter to apply.
+     * @param string $value The value to filter appointments by.
+     * @return ProcessingResult Returns a ProcessingResult object containing the retrieved appointments.
+     */
+    public function getAppointments(string $filter_type, string $value): ProcessingResult
+    {
+        $queryset = null;
+        
+        $sql .= "SELECT pce.pc_eid, pce.uuid AS pc_uuid, pd.uuid AS puuid,";
+        $sql .= "pd.fname, pd.lname, pd.drivers_license, pd.pid, pd.email, pce.pc_apptstatus,";
+        $sql .= "pce.pc_eventDate, pce.pc_startTime, pce.pc_endTime, pce.pc_time,";
+        $sql .= "pce.pc_pid,pce.pc_hometext, pce.pc_title, pce.pc_room,pce.pc_duration ";
+        $sql .= "FROM `openemr_postcalendar_events` AS `pce`";
+        $sql .= "LEFT JOIN `patient_data` AS `pd` ON `pd`.`pid` = `pce`.`pc_pid`";
+
+        if (array_key_exists($filter_type, self::FILTER_METHODS_MAPPER)) {
+            $queryset = $this->{self::FILTER_METHODS_MAPPER[$filter_type]}($value, $sql);
+        } else {
+            $queryset = $this->getAllAppointments($sql);
+        }
+
+        $data = $this->renderResults($queryset);
+        $processingResult = new ProcessingResult();
+        $processingResult->addData($data);
+        return $processingResult;
+    }
+
+    /**
+     * Updates the data of a medical appointment.
+     *
+     * @param string $euuid The UUID of the appointment.
+     * @param array $data An array containing the updated appointment data.
+     * @return array|null Returns an array with the updated appointment data if successful; otherwise, returns null.
+     */
+    public function updateAppointment(string $euuid, array $data): array|null
+    {
+        $puuidBinary = $this->decodeUuid($euuid);
+
+        if(!$puuidBinary) {
+            return null;
+        }
+
+        $query = $this->buildUpdateColumns($data);
+        $sql = " UPDATE openemr_postcalendar_events SET ";
+        $sql .= $query['set'];
+        $sql .= " WHERE `uuid` = ?";
+
+        array_push($query['bind'], $puuidBinary);
+        sqlStatement($sql, $query['bind']);
+        return $this->getAppointment($euuid);
+    }
+
     public function getAppointmentsForPatient($pid)
     {
         $sqlBindArray = array();
@@ -199,6 +427,7 @@ class AppointmentService extends BaseService
                        pd.lname,
                        pd.DOB,
                        pd.pid,
+                       pd.email,
                        pd.uuid AS puuid,
                        providers.uuid AS pce_aid_uuid,
                        providers.npi AS pce_aid_npi,
@@ -212,6 +441,9 @@ class AppointmentService extends BaseService
                        pce.pc_billing_location,
                        pce.pc_catid,
                        pce.pc_pid,
+                       pce.pc_hometext,
+                       pce.pc_room,
+                       pce.pc_duration,
                        f1.name as facility_name,
                        f1_map.uuid as facility_uuid,
                        f2.name as billing_location_name,
@@ -238,19 +470,22 @@ class AppointmentService extends BaseService
         }
         return $finalRecords;
     }
-
-    public function getAppointment($eid)
+    
+    public function getAppointment(string $euuid)
     {
+        $puuidBinary = $this->decodeUuid($euuid);
         $sql = "SELECT pce.pc_eid,
                        pce.uuid AS pc_uuid,
                        pd.fname,
                        pd.lname,
                        pd.DOB,
                        pd.pid,
+                       pd.email,
                        pd.uuid AS puuid,
                        providers.uuid AS pce_aid_uuid,
                        providers.npi AS pce_aid_npi,
                        pce.pc_aid,
+                       pce.pc_title,
                        pce.pc_apptstatus,
                        pce.pc_eventDate,
                        pce.pc_startTime,
@@ -274,9 +509,9 @@ class AppointmentService extends BaseService
                        LEFT JOIN uuid_mapping as f2_map ON f2_map.target_uuid=f2.uuid AND f2_map.resource='Location'
                        LEFT JOIN patient_data as pd ON pd.pid = pce.pc_pid
                        LEFT JOIN users as providers ON pce.pc_aid = providers.id
-                       WHERE pce.pc_eid = ?";
+                       WHERE pce.uuid = ?";
 
-        $records = QueryUtils::fetchRecords($sql, [$eid]);
+        $records = QueryUtils::fetchRecords($sql, [$puuidBinary]);
         $finalRecords = [];
         if (!empty($records)) {
             foreach ($records as $record) {
@@ -286,51 +521,64 @@ class AppointmentService extends BaseService
         return $finalRecords;
     }
 
-    public function insert($pid, $data)
+    /**
+     * Inserts a new medical appointment into the database.
+     *
+     * @param string $puuid The UUID of the patient for whom the appointment is being inserted.
+     * @param array $data An array containing the appointment data.
+     * @return mixed|null Returns the result of the insertion operation if successful; otherwise, returns null.
+     */
+    public function insert(string $puuid, array $data)
     {
-        $startTime = date("H:i:s", strtotime($data['pc_startTime']));
-        // TODO: Why are we adding strings with numbers?  How is this even working
-        $endTime = $startTime . $data['pc_duration'];
-        $uuid = (new UuidRegistry())->createUuid();
+        $puuidBinary = $this->decodeUuid($puuid);
+        $account_sql = "SELECT * FROM `patient_data` WHERE `uuid` = ?";
+        $patient = sqlQuery($account_sql, array($puuidBinary));
 
-        $sql  = " INSERT INTO openemr_postcalendar_events SET";
-        $sql .= "     uuid=?,";
-        $sql .= "     pc_pid=?,";
-        $sql .= "     pc_catid=?,";
-        $sql .= "     pc_title=?,";
-        $sql .= "     pc_duration=?,";
-        $sql .= "     pc_hometext=?,";
-        $sql .= "     pc_eventDate=?,";
-        $sql .= "     pc_apptstatus=?,";
-        $sql .= "     pc_startTime=?,";
-        $sql .= "     pc_endTime=?,";
-        $sql .= "     pc_facility=?,";
-        $sql .= "     pc_billing_location=?,";
-        $sql .= "     pc_informant=1,";
-        $sql .= "     pc_eventstatus=1,";
-        $sql .= "     pc_sharing=1,";
-        $sql .= "     pc_aid=?";
+        if(!empty($patient)) {
+            $pid = $patient["pid"];
+            $uuid = (new UuidRegistry())->createUuid();
+            $sql  = " INSERT INTO openemr_postcalendar_events SET";
+            $sql .= "     uuid=?,";
+            $sql .= "     pc_pid=?,";
+            $sql .= "     pc_catid=?,";
+            $sql .= "     pc_title=?,";
+            $sql .= "     pc_duration=?,";
+            $sql .= "     pc_hometext=?,";
+            $sql .= "     pc_eventDate=?,";
+            $sql .= "     pc_apptstatus=?,";
+            $sql .= "     pc_startTime=?,";
+            $sql .= "     pc_endTime=?,";
+            $sql .= "     pc_facility=?,";
+            $sql .= "     pc_billing_location=?,";
+            $sql .= "     pc_informant=1,";
+            $sql .= "     pc_eventstatus=1,";
+            $sql .= "     pc_sharing=1,";
+            $sql .= "     pc_aid=?,";
+            $sql .= "     pc_room=?,";
+            $sql .= "     pc_time=?";
 
-        $results = sqlInsert(
-            $sql,
-            array(
-                $uuid,
-                $pid,
-                $data["pc_catid"],
-                $data["pc_title"],
-                $data["pc_duration"],
-                $data["pc_hometext"],
-                $data["pc_eventDate"],
-                $data['pc_apptstatus'],
-                $startTime,
-                $endTime,
-                $data["pc_facility"],
-                $data["pc_billing_location"],
-                $data["pc_aid"] ?? null
-            )
-        );
-
-        return $results;
+            $results = sqlInsert(
+                $sql,
+                array(
+                    $uuid,
+                    $pid,
+                    $data["pc_catid"],
+                    $data["pc_title"],
+                    $data["pc_duration"],
+                    $data["pc_hometext"],
+                    $data["pc_eventDate"],
+                    $data['pc_apptstatus'],
+                    $data["pc_startTime"],
+                    $data["pc_endTime"],
+                    $data["pc_facility"],
+                    $data["pc_billing_location"],
+                    $data["pc_aid"] ?? null,
+                    $data["pc_room"],
+                    $data["pc_time"],                    
+                )
+            );
+            return $results;   
+        }
     }
 
     /**
@@ -447,6 +695,26 @@ class AppointmentService extends BaseService
                 $this->deleteAppointmentRecord($eid);
             }
         }
+    }
+
+    /**
+     * Removes a medical appointment for a patient using the appointment's UUID.
+     *
+     * @param string $euuid The UUID of the appointment.
+     * @return string|null Returns "ok" if the appointment is deleted successfully; otherwise, returns null.
+     */
+    public function deleteAppointmentByUuid(string $euuid): string|null
+    {
+        $puuidBinary = $this->decodeUuid($euuid);
+        $sql = "DELETE FROM `openemr_postcalendar_events`";
+        $sql .= " WHERE `uuid` = ?";
+
+        if($this->getAppointment($euuid)) {
+            sqlQuery($sql, array($puuidBinary));
+            return "ok";
+        }
+
+        return null;
     }
 
     public function deleteAppointmentRecord($eid)
