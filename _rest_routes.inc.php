@@ -5158,7 +5158,7 @@ RestConfig::$ROUTE_MAP = array(
      *      @OA\Parameter(
      *          name="puuid",
      *          in="path",
-     *          description="The id for the patient.",
+     *          description="The uuid for the patient.",
      *          required=true,
      *          @OA\Schema(
      *              type="string"
