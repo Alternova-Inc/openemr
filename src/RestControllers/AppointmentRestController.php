@@ -17,19 +17,62 @@ use OpenEMR\RestControllers\RestControllerHelper;
 use OpenEMR\Services\AppointmentService;
 use OpenEMR\Services\PatientService;
 use OpenEMR\Validators\ProcessingResult;
+use OpenEMR\Validators\AppointmentValidator;
+
 
 class AppointmentRestController
 {
     private $appointmentService;
+    private const UNKNOW_FILTER_TYPE = "Unknow";
+    private const ARRAY_MODE = 2;
+    private const SUPPORTED_FILTER_TYPES = array(
+        "puuid",
+        "title",
+        "date",
+        "status",
+        "date_range"
+    );
+    
+    /**
+     * @var AppointmentValidator
+     */
+    private $appointmentValidator;
 
     public function __construct()
     {
         $this->appointmentService = new AppointmentService();
+        $this->appointmentValidator = new AppointmentValidator();
     }
 
-    public function getOne($eid)
+    /**
+     * Retrieves a single appointment by its UUID.
+     *
+     * @param string $appointment_uuid The UUID of the appointment to retrieve.
+     * @return mixed Returns the result of the appointment retrieval operation.
+     */
+    public function getOne(string $appointment_uuid): array
     {
-        $serviceResult = $this->appointmentService->getAppointment($eid);
+        $serviceResult = $this->appointmentService->getAppointment($appointment_uuid);
+        return RestControllerHelper::responseHandler($serviceResult, null, 200);
+    }
+
+    /**
+     * Updates an appointment by its UUID with the provided data.
+     *
+     * @param string $appointment_uuid The UUID of the appointment to update.
+     * @param array $data An array containing the updated appointment data.
+     * @return mixed Returns the result of the appointment update operation.
+     */
+    public function update(string $appointment_uuid, array $data): array
+    {
+        $validationResult = $this->appointmentValidator->update_validate($data);
+        $validationHandlerResult = RestControllerHelper::validationHandler($validationResult);
+        
+        if (is_array($validationHandlerResult)) {
+            return $validationHandlerResult;
+        }
+
+        $serviceResult = $this->appointmentService->updateAppointment($appointment_uuid, $data);
         return RestControllerHelper::responseHandler($serviceResult, null, 200);
     }
 
@@ -40,16 +83,38 @@ class AppointmentRestController
         return RestControllerHelper::responseHandler($data[0] ?? [], null, 200);
     }
 
-    public function getAll()
+    /**
+     * Retrieves all appointments based on the provided filters.
+     *
+     * @param array $data An array containing the filter criteria.
+     * @return mixed Returns the result of retrieving appointments based on the filters.
+     */
+    public function getAll(array $data): array
     {
-        $serviceResult = $this->appointmentService->getAppointmentsForPatient(null);
-        return RestControllerHelper::responseHandler($serviceResult, null, 200);
+        $filter_value = "";
+        $filter_type = self::UNKNOW_FILTER_TYPE;
+        $validSearchFields = array_filter(
+            $data,
+            fn($key) => in_array($key, self::SUPPORTED_FILTER_TYPES),
+            self::ARRAY_MODE
+        );
+        
+        if (!empty($validSearchFields)) {
+            $filter_type = key($validSearchFields);
+            $filter_value = reset($validSearchFields);        
+        }
+
+        $serviceResult = $this->appointmentService->getAppointments(
+            $filter_type, $filter_value
+        );
+    
+        return RestControllerHelper::handleProcessingResult($serviceResult, 200);
     }
 
-    public function getAllForPatientByUuid($puuid)
+    public function getAllForPatientByUuid($patient_uuid)
     {
         $patientService = new PatientService();
-        $result = ProcessingResult::extractDataArray($patientService->getOne($puuid));
+        $result = ProcessingResult::extractDataArray($patientService->getOne($patient_uuid));
         if (!empty($result)) {
             $serviceResult = $this->appointmentService->getAppointmentsForPatient($result[0]['pid']);
         } else {
@@ -65,18 +130,38 @@ class AppointmentRestController
         return RestControllerHelper::responseHandler($serviceResult, null, 200);
     }
 
-    public function post($pid, $data)
+    /**
+     * Creates a new appointment for a patient identified by UUID.
+     *
+     * @param string $patient_uuid The UUID of the patient for whom the appointment is being created.
+     * @param array $data An array containing the appointment data.
+     * @return mixed Returns the result of the appointment creation operation.
+     */
+    public function post(string $patient_uuid, array $data): array
     {
-        $data['pid'] = $pid;
-        $validationResult = $this->appointmentService->validate($data);
-
-        $validationHandlerResult = RestControllerHelper::validationHandler($validationResult);
+        $data['patient_uuid'] = $patient_uuid;
+        $data['pc_time'] = date("Y-m-d H:i:s");
+        $validationResult = $this->appointmentValidator->validate($data);
+        $validationHandlerResult = RestControllerHelper::validationHandler($validationResult);        
+        
         if (is_array($validationHandlerResult)) {
-            return $validationHandlerResult;
+             return $validationHandlerResult;
         }
 
-        $serviceResult = $this->appointmentService->insert($pid, $data);
-        return RestControllerHelper::responseHandler(array("id" => $serviceResult), null, 200);
+        $serviceResult = $this->appointmentService->insert($patient_uuid, $data);
+        return RestControllerHelper::responseHandler(array("id" => $serviceResult), null, 201);
+    }
+
+    /**
+     * Deletes an appointment by its UUID.
+     *
+     * @param string $appointment_uuid The UUID of the appointment to delete.
+     * @return mixed Returns the result of the appointment deletion operation.
+     */
+    public function deleteByUuid(string $appointment_uuid): string|null
+    {
+        $serviceResult = $this->appointmentService->deleteAppointmentByUuid($appointment_uuid);
+        return RestControllerHelper::responseHandler($serviceResult, null, 200);;
     }
 
     public function delete($eid)
