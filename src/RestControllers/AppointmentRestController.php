@@ -23,8 +23,6 @@ use OpenEMR\Validators\AppointmentValidator;
 class AppointmentRestController
 {
     private $appointmentService;
-    private const UNKNOW_FILTER_TYPE = "Unknow";
-    private const ARRAY_MODE = 2;
     private const SUPPORTED_FILTER_TYPES = array(
         "puuid",
         "title",
@@ -91,22 +89,13 @@ class AppointmentRestController
      */
     public function getAll(array $data): array
     {
-        $filter_value = "";
-        $filter_type = self::UNKNOW_FILTER_TYPE;
         $validSearchFields = array_filter(
             $data,
             fn($key) => in_array($key, self::SUPPORTED_FILTER_TYPES),
-            self::ARRAY_MODE
+            ARRAY_FILTER_USE_KEY
         );
-        
-        if (!empty($validSearchFields)) {
-            $filter_type = key($validSearchFields);
-            $filter_value = reset($validSearchFields);        
-        }
 
-        $serviceResult = $this->appointmentService->getAppointments(
-            $filter_type, $filter_value
-        );
+        $serviceResult = $this->appointmentService->getAppointments($validSearchFields);
     
         return RestControllerHelper::handleProcessingResult($serviceResult, 200);
     }
