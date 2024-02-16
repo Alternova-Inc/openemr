@@ -5152,13 +5152,13 @@ RestConfig::$ROUTE_MAP = array(
 
     /**
      *  @OA\Post(
-     *      path="/api/patient/{pid}/appointment",
+     *      path="/api/patient/{puuid}/appointment",
      *      description="Submits a new appointment",
      *      tags={"standard"},
      *      @OA\Parameter(
-     *          name="pid",
+     *          name="puuid",
      *          in="path",
-     *          description="The id for the patient.",
+     *          description="The uuid for the patient.",
      *          required=true,
      *          @OA\Schema(
      *              type="string"
@@ -5250,10 +5250,10 @@ RestConfig::$ROUTE_MAP = array(
      *      security={{"openemr_auth":{}}}
      *  )
      */
-    "POST /api/patient/:pid/appointment" => function ($pid) {
+    "POST /api/patient/:puuid/appointment" => function (string $puuid) {
         RestConfig::authorization_check("patients", "appt");
         $data = (array) (json_decode(file_get_contents("php://input")));
-        $return = (new AppointmentRestController())->post($pid, $data);
+        $return = (new AppointmentRestController())->post($puuid, $data);
         RestConfig::apiLog($return, $data);
         return $return;
     },
@@ -5279,21 +5279,21 @@ RestConfig::$ROUTE_MAP = array(
      *  )
      */
     "GET /api/appointment" => function () {
-        RestConfig::authorization_check("patients", "appt");
-        $return = (new AppointmentRestController())->getAll();
+        RestConfig::authorization_check("patients", "appt");        
+        $return = (new AppointmentRestController())->getAll($_GET);
         RestConfig::apiLog($return);
         return $return;
     },
 
     /**
      *  @OA\Get(
-     *      path="/api/appointment/{eid}",
+     *      path="/api/appointment/{euuid}",
      *      description="Retrieves an appointment",
      *      tags={"standard"},
      *      @OA\Parameter(
-     *          name="eid",
+     *          name="euuid",
      *          in="path",
-     *          description="The eid for the appointment.",
+     *          description="The euuid for the appointment.",
      *          required=true,
      *          @OA\Schema(
      *              type="string"
@@ -5314,9 +5314,82 @@ RestConfig::$ROUTE_MAP = array(
      *      security={{"openemr_auth":{}}}
      *  )
      */
-    "GET /api/appointment/:eid" => function ($eid) {
+    "GET /api/appointment/:euuid" => function (string $euuid) {
         RestConfig::authorization_check("patients", "appt");
-        $return = (new AppointmentRestController())->getOne($eid);
+        $return = (new AppointmentRestController())->getOne($euuid);
+        RestConfig::apiLog($return);
+        return $return;
+    },
+
+    /**
+     *  @OA\Put(
+     *      path="/api/appointment/{euuid}",
+     *      description="Update an appointment",
+     *      tags={"standard"},
+     *      @OA\Parameter(
+     *          name="euuid",
+     *          in="path",
+     *          description="The euuid for the appointment.",
+     *          required=true,
+     *          @OA\Schema(
+     *              type="string"
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="400",
+     *          ref="#/components/responses/badrequest"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "PUT /api/appointment/:euuid" => function (string $euuid) {
+        $data = (array) (json_decode(file_get_contents("php://input")));
+        RestConfig::authorization_check("patients", "appt");
+        $return = (new AppointmentRestController())->update($euuid, $data);
+        RestConfig::apiLog($return, $data);
+        return $return;
+    },
+
+    /**
+     *  @OA\Delete(
+     *      path="/api/appointment/{euuid}",
+     *      description="Delete an appointment",
+     *      tags={"standard"},
+     *      @OA\Parameter(
+     *          name="euuid",
+     *          in="path",
+     *          description="The euuid for the appointment.",
+     *          required=true,
+     *          @OA\Schema(
+     *              type="string"
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          ref="#/components/responses/standard"
+     *      ),
+     *      @OA\Response(
+     *          response="400",
+     *          ref="#/components/responses/badrequest"
+     *      ),
+     *      @OA\Response(
+     *          response="401",
+     *          ref="#/components/responses/unauthorized"
+     *      ),
+     *      security={{"openemr_auth":{}}}
+     *  )
+     */
+    "DELETE /api/appointment/:euuid" => function (string $euuid) {
+        RestConfig::authorization_check("patients", "appt");
+        $return = (new AppointmentRestController())->deleteByUuid($euuid);
         RestConfig::apiLog($return);
         return $return;
     },
