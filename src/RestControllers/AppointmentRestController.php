@@ -59,11 +59,11 @@ class AppointmentRestController
     /**
      * Updates an appointment by its UUID with the provided data.
      *
-     * @param string $euuid The UUID of the appointment to update.
+     * @param string $appointment_uuid The UUID of the appointment to update.
      * @param array $data An array containing the updated appointment data.
      * @return mixed Returns the result of the appointment update operation.
      */
-    public function update(string $euuid, array $data): array
+    public function update(string $appointment_uuid, array $data): array
     {
         $validationResult = $this->appointmentValidator->update_validate($data);
         $validationHandlerResult = RestControllerHelper::validationHandler($validationResult);
@@ -72,7 +72,7 @@ class AppointmentRestController
             return $validationHandlerResult;
         }
 
-        $serviceResult = $this->appointmentService->updateAppointment($euuid, $data);
+        $serviceResult = $this->appointmentService->updateAppointment($appointment_uuid, $data);
         return RestControllerHelper::responseHandler($serviceResult, null, 200);
     }
 
@@ -111,10 +111,10 @@ class AppointmentRestController
         return RestControllerHelper::handleProcessingResult($serviceResult, 200);
     }
 
-    public function getAllForPatientByUuid($puuid)
+    public function getAllForPatientByUuid($patient_uuid)
     {
         $patientService = new PatientService();
-        $result = ProcessingResult::extractDataArray($patientService->getOne($puuid));
+        $result = ProcessingResult::extractDataArray($patientService->getOne($patient_uuid));
         if (!empty($result)) {
             $serviceResult = $this->appointmentService->getAppointmentsForPatient($result[0]['pid']);
         } else {
@@ -133,7 +133,7 @@ class AppointmentRestController
     /**
      * Creates a new appointment for a patient identified by UUID.
      *
-     * @param string $puuid The UUID of the patient for whom the appointment is being created.
+     * @param string $patient_uuid The UUID of the patient for whom the appointment is being created.
      * @param array $data An array containing the appointment data.
      * @return mixed Returns the result of the appointment creation operation.
      */
@@ -149,13 +149,13 @@ class AppointmentRestController
         }
 
         $serviceResult = $this->appointmentService->insert($patient_uuid, $data);
-        return RestControllerHelper::responseHandler(array("id" => $serviceResult), null, 200);
+        return RestControllerHelper::responseHandler(array("id" => $serviceResult), null, 201);
     }
 
     /**
      * Deletes an appointment by its UUID.
      *
-     * @param string $euuid The UUID of the appointment to delete.
+     * @param string $appointment_uuid The UUID of the appointment to delete.
      * @return mixed Returns the result of the appointment deletion operation.
      */
     public function deleteByUuid(string $appointment_uuid): string|null
