@@ -5250,7 +5250,7 @@ RestConfig::$ROUTE_MAP = array(
      *      security={{"openemr_auth":{}}}
      *  )
      */
-    "POST /api/patient/:puuid/appointment" => function ($puuid) {
+    "POST /api/patient/:puuid/appointment" => function (string $puuid) {
         RestConfig::authorization_check("patients", "appt");
         $data = (array) (json_decode(file_get_contents("php://input")));
         $return = (new AppointmentRestController())->post($puuid, $data);
@@ -5314,7 +5314,7 @@ RestConfig::$ROUTE_MAP = array(
      *      security={{"openemr_auth":{}}}
      *  )
      */
-    "GET /api/appointment/:euuid" => function ($euuid) {
+    "GET /api/appointment/:euuid" => function (string $euuid) {
         RestConfig::authorization_check("patients", "appt");
         $return = (new AppointmentRestController())->getOne($euuid);
         RestConfig::apiLog($return);
