@@ -210,37 +210,22 @@ class AppointmentService extends BaseService
     }
 
     /**
-     * Retrieves all medical appointments that are in the database.
-     *
-     * @param string $sql The SQL query string to retrieve appointments.
-     * @return ADORecordSet_mysqli Returns the result set of all appointments.
-     */
-    private function getAllAppointments(string $sql)
-    {
-        $sql .= " ORDER BY `pce`.`pc_time` DESC";
-        return sqlStatement($sql);
-    }
-
-    /**
      * Allows filtering medical appointments by patient UUID.
      *
      * @param string $puuid The UUID of the patient to filter appointments.
      * @param string $sql The SQL query string to which the filter condition will be appended.
-     * @return ADORecordSet_mysqli|null Returns the result set of filtered appointments if patient is found; otherwise, returns null.
+     * @return string Returns the result set of filtered appointments if patient is found; otherwise, returns null.
      */
-    private function getAppointmentsByPatientUuid(string $puuid, string $sql)
+    private function getAppointmentsByPatientUuid(string $puuid): string
     {
         $puuidBinary = $this->decodeUuid($puuid);
         $account_sql = "SELECT * FROM `patient_data` WHERE `uuid` = ?";
         $patient = sqlQuery($account_sql, array($puuidBinary));
-
-        if(!empty($patient)) {
-            $sql .= " WHERE `pd`.`pid` = " . $patient["pid"];
-            $sql .= " ORDER BY `pce`.`pc_time` DESC";
-            return sqlStatement($sql);
-        }
-
-        return null;
+        
+        $patient_id = $patient["pid"] ?? null;
+        $sql = "`pd`.`pid` = '$patient_id'";
+        
+        return $sql;
     }
 
     /**
@@ -248,13 +233,12 @@ class AppointmentService extends BaseService
      *
      * @param string $date The date to filter appointments.
      * @param string $sql The SQL query string to which the filter condition will be appended.
-     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     * @return string Returns the result set of filtered appointments.
      */
-    private function getAppointmentsByDate(string $date, string $sql)
+    private function getAppointmentsByDate(string $date): string
     {
-        $sql .= " WHERE `pce` . `pc_eventDate` = '$date'";
-        $sql .= " ORDER BY `pce`.`pc_time` DESC";
-        return sqlStatement($sql);
+        $sql = "`pce` . `pc_eventDate` = '$date'";
+        return $sql;
     }
 
     /**
@@ -262,18 +246,17 @@ class AppointmentService extends BaseService
      *
      * @param string $dateRange The date range in the format "start_date:end_date" to filter appointments.
      * @param string $sql The SQL query string to which the filter condition will be appended.
-     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     * @return string Returns the result set of filtered appointments.
      */
-    private function getAppointmentsByDateRange(string $dateRange, string $sql)
+    private function getAppointmentsByDateRange(string $dateRange): string
     {
         $dateRange = str_replace(" ", "", $dateRange);
         $split_date = explode(":", $dateRange);
         $start_date = $split_date[0];
         $end_range = $split_date[1];
 
-        $sql .= " WHERE `pce` . `pc_eventDate` BETWEEN '$start_date' AND '$end_range'";
-        $sql .= " ORDER BY `pce`.`pc_time` DESC";
-        return sqlStatement($sql);
+        $sql = "`pce` . `pc_eventDate` BETWEEN '$start_date' AND '$end_range'";
+        return $sql;
     }
 
     /**
@@ -281,13 +264,12 @@ class AppointmentService extends BaseService
      *
      * @param string $title The title of appointments to filter.
      * @param string $sql The SQL query string to which the filter condition will be appended.
-     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     * @return string Returns the result set of filtered appointments.
      */
-    private function getAppointmentsByTitle(string $title, string $sql)
+    private function getAppointmentsByTitle(string $title): string
     {
-        $sql .= " WHERE LOWER(`pc_title`) LIKE '%$title%'";
-        $sql .= " ORDER BY `pce`.`pc_time` DESC";
-        return sqlStatement($sql);
+        $sql = "LOWER(`pc_title`) LIKE '%$title%'";
+        return $sql;
     }
 
     /**
@@ -295,11 +277,22 @@ class AppointmentService extends BaseService
      *
      * @param string $status The status of appointments to filter.
      * @param string $sql The SQL query string to which the filter condition will be appended.
-     * @return ADORecordSet_mysqli Returns the result set of filtered appointments.
+     * @return string Returns the result set of filtered appointments.
      */
-    private function getAppointmentsStatus(string $status, string $sql)
+    private function getAppointmentsStatus(string $status): string
     {
-        $sql .= " WHERE LOWER(`pc_apptstatus`) LIKE '%$status%'";
+        $sql = "LOWER(`pc_apptstatus`) LIKE '%$status%'";
+        return $sql;
+    }
+
+    /**
+     * Procesa una consulta SQL con una cláusula de ordenación por fecha descendente.
+     *
+     * @param string $sql La consulta SQL a procesar.
+     * @return ADORecordSet_mysqli El resultado de la consulta SQL procesada.
+     */
+    private function processSql(string $sql)
+    {
         $sql .= " ORDER BY `pce`.`pc_time` DESC";
         return sqlStatement($sql);
     }
@@ -311,8 +304,9 @@ class AppointmentService extends BaseService
      * @param string $value The value to filter appointments by.
      * @return ProcessingResult Returns a ProcessingResult object containing the retrieved appointments.
      */
-    public function getAppointments(string $filter_type, string $value): ProcessingResult
+    public function getAppointments(array $filters): ProcessingResult
     {
+        $index = 0;
         $queryset = null;
         
         $sql .= "SELECT pce.pc_eid, pce.uuid AS pc_uuid, pd.uuid AS puuid,";
@@ -322,15 +316,18 @@ class AppointmentService extends BaseService
         $sql .= "FROM `openemr_postcalendar_events` AS `pce`";
         $sql .= "LEFT JOIN `patient_data` AS `pd` ON `pd`.`pid` = `pce`.`pc_pid`";
 
-        if (array_key_exists($filter_type, self::FILTER_METHODS_MAPPER)) {
-            $queryset = $this->{self::FILTER_METHODS_MAPPER[$filter_type]}($value, $sql);
-        } else {
-            $queryset = $this->getAllAppointments($sql);
+        foreach ($filters as $key => $value) {
+            $payload =  $this->{self::FILTER_METHODS_MAPPER[$key]}($value);
+            $sql .= ($index === 0 ? " WHERE " : " AND ") . $payload;
+            $index++;
         }
 
+        $queryset = $this->processSql($sql);
         $data = $this->renderResults($queryset);
+        
         $processingResult = new ProcessingResult();
         $processingResult->addData($data);
+
         return $processingResult;
     }
 
