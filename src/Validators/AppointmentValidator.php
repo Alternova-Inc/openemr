@@ -63,10 +63,10 @@ class AppointmentValidator
         $validator = new Validator();
         $validator->required('pc_catid')->numeric();
         $validator->required('pc_title')->lengthBetween(2, 150);
-        $validator->required('pc_duration')->numeric();
-        $validator->required('pc_room')->string();
-        $validator->required('pc_hometext')->string();
-        $validator->required('pc_apptstatus')->string();
+        $validator->optional('pc_duration')->numeric();
+        $validator->optional('pc_room')->string();
+        $validator->optional('pc_hometext')->string();
+        $validator->optional('pc_apptstatus')->string();
         $validator->required('pc_eventDate')->datetime('Y-m-d');
         $validator->required('pc_startTime')->length(5); // HH:MM is 5 chars
         $validator->required('pc_endTime')->length(5); // HH:MM is 5 chars
