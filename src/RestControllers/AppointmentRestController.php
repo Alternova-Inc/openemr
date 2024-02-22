@@ -24,7 +24,7 @@ class AppointmentRestController
 {
     private $appointmentService;
     private const SUPPORTED_FILTER_TYPES = array(
-        "puuid",
+        "patient",
         "title",
         "date",
         "status",
@@ -138,7 +138,7 @@ class AppointmentRestController
         }
 
         $serviceResult = $this->appointmentService->insert($patient_uuid, $data);
-        return RestControllerHelper::responseHandler(array("id" => $serviceResult), null, 201);
+        return RestControllerHelper::responseHandler(array("uuid" => $serviceResult), null, 201);
     }
 
     /**

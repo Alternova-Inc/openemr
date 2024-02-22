@@ -32,7 +32,7 @@ class AppointmentService extends BaseService
     const FACILITY_TABLE = "facility";
 
     private const FILTER_METHODS_MAPPER = array(
-        "puuid" => "getAppointmentsByPatientUuid",
+        "patient" => "getAppointmentsByPatientUuid",
         "title" => "getAppointmentsByTitle",
         "date" => "getAppointmentsByDate",
         "status" => "getAppointmentsStatus",
@@ -202,7 +202,7 @@ class AppointmentService extends BaseService
                 "pc_eventDate" => $row["pc_eventDate"],
                 "pc_startTime" => $row["pc_startTime"],
                 "pc_endTime" => $row["pc_endTime"],
-                "pc_duration" => $row["pc_duration"],
+                //"pc_duration" => $row["pc_duration"],
                 "pc_apptstatus" => $row["pc_apptstatus"],
             ));
         }
@@ -312,7 +312,7 @@ class AppointmentService extends BaseService
         $sql .= "SELECT pce.pc_eid, pce.uuid AS pc_uuid, pd.uuid AS puuid,";
         $sql .= "pd.fname, pd.lname, pd.drivers_license, pd.pid, pd.email, pce.pc_apptstatus,";
         $sql .= "pce.pc_eventDate, pce.pc_startTime, pce.pc_endTime, pce.pc_time,";
-        $sql .= "pce.pc_pid,pce.pc_hometext, pce.pc_title, pce.pc_room,pce.pc_duration ";
+        $sql .= "pce.pc_pid,pce.pc_hometext, pce.pc_title, pce.pc_room ";
         $sql .= "FROM `openemr_postcalendar_events` AS `pce`";
         $sql .= "LEFT JOIN `patient_data` AS `pd` ON `pd`.`pid` = `pce`.`pc_pid`";
 
@@ -415,11 +415,10 @@ class AppointmentService extends BaseService
         $puuidBinary = $this->decodeUuid($euuid);
         $sql = "SELECT pce.pc_eid,
                        pce.uuid AS pc_uuid,
-                       pd.fname,
-                       pd.lname,
-                       pd.DOB,
+                       pd.fname AS pd_fname,
+                       pd.lname AS pd_lname,
                        pd.pid,
-                       pd.email,
+                       pd.email AS pd_email,
                        pd.uuid AS puuid,
                        providers.uuid AS pce_aid_uuid,
                        providers.npi AS pce_aid_npi,
@@ -430,7 +429,6 @@ class AppointmentService extends BaseService
                        pce.pc_startTime,
                        pce.pc_endTime,
                        pce.pc_time,
-                       pce.pc_duration,
               	       pce.pc_facility,
                        pce.pc_billing_location,
                        pce.pc_catid,
@@ -503,20 +501,20 @@ class AppointmentService extends BaseService
                     $pid,
                     $data["pc_catid"],
                     $data["pc_title"],
-                    $data["pc_duration"],
-                    $data["pc_hometext"],
+                    $data["pc_duration"] ?? 0,
+                    $data["pc_hometext"] ?? "",
                     $data["pc_eventDate"],
-                    $data['pc_apptstatus'],
+                    $data['pc_apptstatus'] ?? "",
                     $data["pc_startTime"],
                     $data["pc_endTime"],
                     $data["pc_facility"],
                     $data["pc_billing_location"],
                     $data["pc_aid"] ?? null,
-                    $data["pc_room"],
-                    $data["pc_time"],                    
+                    $data["pc_room"] ?? "",
+                    $data["pc_time"],
                 )
             );
-            return $results;   
+            return UuidRegistry::uuidToString($uuid);   
         }
     }
 
